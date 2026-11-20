@@ -1,0 +1,12 @@
+data
+node_modules
+test
+*.sqlite*
+*.zip
+.env
+.env*
+*.env
+secrets
+backups
+replit-starter
+.git

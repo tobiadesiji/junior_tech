@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Junior Tech Academy"
+description = "A private family STEM learning platform with a 24-week curriculum, learner projects, guardian guidance and milestone reviews."
+version = "1.0.0"
+id = "artifacts/junior-tech-academy"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25458
+
+[services.development]
+run = "pnpm --filter @workspace/junior-tech-academy run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/junior-tech-academy", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/junior-tech-academy/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25458"
+BASE_PATH = "/"

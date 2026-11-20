@@ -1,0 +1,23 @@
+services:
+  academy:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${EZRA_BIND_IP:-127.0.0.1}:${EZRA_PORT:-3080}:3000"
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?Set APP_ORIGIN to your HTTPS site origin}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6.1-terra}
+      OPENAI_ZDR_CONFIRMED: ${OPENAI_ZDR_CONFIRMED:-false}
+      AI_DAILY_REQUEST_LIMIT: ${AI_DAILY_REQUEST_LIMIT:-200}
+    volumes:
+      - academy-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  academy-data:
+    name: ezra-training-data

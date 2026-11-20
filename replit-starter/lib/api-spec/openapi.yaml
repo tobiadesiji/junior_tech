@@ -1,0 +1,301 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 1.0.0
+  description: Private family STEM learning API
+servers:
+  - url: /api
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+  /academy:
+    get:
+      operationId: getAcademy
+      summary: Public curriculum or authorised family workspace
+      responses:
+        "200":
+          description: Workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AcademyState" }
+  /academy/command:
+    post:
+      operationId: academyCommand
+      summary: Perform an authorised family action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcademyAction" }
+      responses:
+        "200":
+          description: Action saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionResult" }
+  /academy/child-login:
+    post:
+      operationId: childLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChildCredentials" }
+      responses:
+        "200":
+          description: Separate child session created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionResult" }
+  /academy/child-logout:
+    post:
+      operationId: childLogout
+      responses:
+        "200":
+          description: Child session cleared
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionResult" }
+  /academy/uploads:
+    post:
+      operationId: requestAcademyUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadInput" }
+      responses:
+        "200":
+          description: Private upload slot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadSlot" }
+  /academy/uploads/{id}/complete:
+    post:
+      operationId: completeAcademyUpload
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Bytes validated and file ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionResult" }
+  /academy/files/{id}:
+    get:
+      operationId: downloadAcademyFile
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Authorised attachment download
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /academy/children/{id}/export:
+    get:
+      operationId: exportChild
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Private child data export
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    Resource:
+      type: object
+      required: [title, url]
+      properties:
+        title: { type: string }
+        url: { type: string }
+    Session:
+      type: object
+      required: [title, minutes, explanation, steps]
+      properties:
+        title: { type: string }
+        minutes: { type: string }
+        explanation: { type: string }
+        steps: { type: array, items: { type: string } }
+    Quiz:
+      type: object
+      required: [question, options]
+      properties:
+        question: { type: string }
+        options: { type: array, items: { type: string } }
+    Lesson:
+      type: object
+      required: [week, module, moduleTitle, title, subtitle, objectives, sessionA, sessionB, challenge, output, assessment, quiz, resources, skills, milestone]
+      properties:
+        week: { type: integer }
+        module: { type: integer }
+        moduleTitle: { type: string }
+        title: { type: string }
+        subtitle: { type: string }
+        objectives: { type: array, items: { type: string } }
+        sessionA: { $ref: "#/components/schemas/Session" }
+        sessionB: { $ref: "#/components/schemas/Session" }
+        challenge: { type: string }
+        output: { type: string }
+        assessment: { type: string }
+        quiz: { $ref: "#/components/schemas/Quiz" }
+        resources: { type: array, items: { $ref: "#/components/schemas/Resource" } }
+        skills: { type: array, items: { type: string } }
+        teachingNotes: { type: string }
+        milestone: { type: boolean }
+    Child:
+      type: object
+      required: [id, nickname, avatar, ageRange, username, unlockedWeek, schedule]
+      properties:
+        id: { type: string }
+        nickname: { type: string }
+        avatar: { type: string }
+        ageRange: { type: string }
+        username: { type: string }
+        unlockedWeek: { type: integer }
+        schedule: { type: string }
+    Progress:
+      type: object
+      required: [childId, week, completedSteps, quizPassed, status, scores, feedback]
+      properties:
+        childId: { type: string }
+        week: { type: integer }
+        completedSteps: { type: array, items: { type: string } }
+        quizPassed: { type: boolean }
+        status: { type: string, enum: [not_started, in_progress, submitted, approved, changes_requested] }
+        scores: { type: array, items: { type: integer } }
+        feedback: { type: string }
+    Project:
+      type: object
+      required: [id, childId, week, title, description, category, link, reflection, fileId, version, status, createdAt]
+      properties:
+        id: { type: string }
+        childId: { type: string }
+        week: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        category: { type: string }
+        link: { type: string }
+        reflection: { type: string }
+        fileId: { type: string }
+        version: { type: integer }
+        status: { type: string }
+        createdAt: { type: string }
+        feedback: { type: string }
+    Activity:
+      type: object
+      required: [id, childId, text, createdAt, actor]
+      properties:
+        id: { type: string }
+        childId: { type: string }
+        text: { type: string }
+        createdAt: { type: string }
+        actor: { type: string }
+    Guardian:
+      type: object
+      required: [id, label, owner]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        owner: { type: boolean }
+    Invitation:
+      type: object
+      required: [id, email, expiresAt, status]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        expiresAt: { type: string }
+        status: { type: string }
+    AcademyState:
+      type: object
+      required: [role, onboarded, csrfToken, lessons, children, progress, projects, activity, guardians, invitations, isOwner]
+      properties:
+        role: { type: string, enum: [guest, guardian, child] }
+        onboarded: { type: boolean }
+        csrfToken: { type: string }
+        isOwner: { type: boolean }
+        lessons: { type: array, items: { $ref: "#/components/schemas/Lesson" } }
+        children: { type: array, items: { $ref: "#/components/schemas/Child" } }
+        progress: { type: array, items: { $ref: "#/components/schemas/Progress" } }
+        projects: { type: array, items: { $ref: "#/components/schemas/Project" } }
+        activity: { type: array, items: { $ref: "#/components/schemas/Activity" } }
+        guardians: { type: array, items: { $ref: "#/components/schemas/Guardian" } }
+        invitations: { type: array, items: { $ref: "#/components/schemas/Invitation" } }
+    AcademyAction:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [onboard, add_child, update_child, reset_access, delete_child, invite_guardian, accept_invitation, revoke_invitation, revoke_guardian, toggle_step, answer_quiz, submit_project, review_week, unlock_week]
+        childId: { type: string }
+        week: { type: integer, minimum: 1, maximum: 24 }
+        nickname: { type: string, maxLength: 30 }
+        avatar: { type: string }
+        ageRange: { type: string }
+        username: { type: string }
+        passphrase: { type: string }
+        schedule: { type: string, maxLength: 500 }
+        email: { type: string }
+        invitationId: { type: string }
+        token: { type: string }
+        guardianId: { type: string }
+        stepId: { type: string }
+        completed: { type: boolean }
+        answer: { type: integer }
+        title: { type: string, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        category: { type: string, maxLength: 80 }
+        link: { type: string, maxLength: 1000 }
+        reflection: { type: string, maxLength: 2000 }
+        fileId: { type: string }
+        status: { type: string, enum: [approved, changes_requested, in_progress] }
+        scores: { type: array, minItems: 5, maxItems: 5, items: { type: integer, minimum: 0, maximum: 3 } }
+        feedback: { type: string, maxLength: 2000 }
+        consent: { type: boolean }
+        privacyAccepted: { type: boolean }
+        confirm: { type: string }
+    ActionResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        token: { type: string }
+        correct: { type: boolean }
+        explanation: { type: string }
+        id: { type: string }
+    ChildCredentials:
+      type: object
+      required: [username, passphrase]
+      properties:
+        username: { type: string, minLength: 3, maxLength: 40 }
+        passphrase: { type: string, minLength: 6, maxLength: 128 }
+    UploadInput:
+      type: object
+      required: [childId, name, size, contentType]
+      properties:
+        childId: { type: string }
+        name: { type: string, maxLength: 150 }
+        size: { type: integer, minimum: 1, maximum: 5242880 }
+        contentType: { type: string, enum: [image/png, image/jpeg, application/pdf, text/plain] }
+    UploadSlot:
+      type: object
+      required: [id, uploadURL]
+      properties:
+        id: { type: string }
+        uploadURL: { type: string }
