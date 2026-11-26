@@ -8,7 +8,7 @@ import {join} from 'node:path';
 
 test('academy management, content persistence and parent saves',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'academy-management-'));
-  const options={dbPath:join(dir,'academy.sqlite'),allowRegistration:true,adminEmail:'admin@example.test'};
+  const options={production:false,origin:'http://localhost:3000',dbPath:join(dir,'academy.sqlite'),allowRegistration:true,adminEmail:'admin@example.test'};
   let app,base;
   async function start(){app=createAcademy(options);await new Promise(r=>app.server.listen(0,'127.0.0.1',r));base=`http://127.0.0.1:${app.server.address().port}`;}
   function client(){const c={cookie:'',csrf:''};c.call=async(path,data,csrf=c.csrf)=>{
