@@ -65,3 +65,14 @@ test('AI guided mode offers no text entry; transcript text is safely escaped',()
   const chat=renderer({...fixture,ai:{...base.ai,typedQuestionsAllowed:true},aiSettings:[{...base.aiSettings[0],mode:'chat'}]})('ai');
   assert.match(chat,/id="ai-chat-form"/);
 });
+
+test('public landing and sign-in are separate views; content editing is restricted and escaped',()=>{
+  const render=renderer({...base,role:'guest'});
+  assert.match(render('home'),/Small steps. Brilliant discoveries/);
+  assert.ok(!render('home').includes('id="auth-form"'));
+  assert.match(render('login'),/id="auth-form"/);
+  assert.ok(!renderer({...base,role:'parent',canEditContent:false})('content').includes('id="lesson-edit-form"'));
+  assert.match(renderer({...base,role:'tutor',canEditContent:true})('content'),/Open content editor/);
+  const attack='<img src=x onerror=alert(1)>';
+  assert.ok(!renderer({...base,role:'guest',landing:{headline:attack}})('home').includes('<img src=x'));
+});

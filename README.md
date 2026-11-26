@@ -1,3 +1,12 @@
+## Academy update — 26 November 2026 (v0.3.0)
+
+- Public landing page at `/`, with separate parent, student and tutor sign-in at `/#login`.
+- Parents can record completed learning steps for their own children, save study plans, and manage tutor/AI permissions. Knowledge checks and project submissions use the student account; parent/tutor reviews unlock the next week.
+- The administrator configured by `ADMIN_EMAIL` sees every parent, student and tutor under **Academy admin**. They can create accounts, edit details, pause/reactivate access, reset passphrases, and change student schedules and available weeks. Pausing a parent also prevents their students signing in. The configured administrator cannot disable or rename their own account from this screen.
+- Administrators and active tutors have **Edit content** for public landing copy and all 24 lessons, including objectives, sessions, resources, quizzes and teaching notes. Revisions reject conflicting saves. Existing completion history is retained when a lesson changes.
+- Lesson edits are stored in SQLite and used by the public curriculum, quiz checking and AI lesson context. Account actions and content saves are audited. Database changes are additive; include the new module in the deployed image.
+- Stale browser tabs can refresh the CSRF token once for the same signed-in account before retrying a rejected write. Per-user save limits avoid sharing a single quota behind the reverse proxy.
+
 # Junior Tech Academy — v0.2.0
 
 A private family learning app for a beginner aged around 10, with a 24-week IT,

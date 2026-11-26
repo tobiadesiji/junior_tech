@@ -7,6 +7,7 @@ import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { lessons, publicLessons, stepIds, rubric } from './curriculum.mjs';
 import { createLearningSupport } from './learning-support.mjs';
+import { createManagement } from './academy-management.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const derive = promisify(scrypt);
@@ -98,7 +99,7 @@ export function createAcademy(options = {}) {
     if (!cookie || !/^[a-f0-9]{64}$/.test(cookie)) return null;
     const sess = q('SELECT * FROM sessions WHERE token=? AND expires>?').get(digest(cookie), Date.now());
     if (!sess) return null;
-    const user = sess.role === 'parent' ? q('SELECT id,email,name FROM parents WHERE id=?').get(sess.user_id) : sess.role === 'tutor' ? q('SELECT id,email,name FROM tutors WHERE id=? AND active=1').get(sess.user_id) : sess.role === 'child' ? q('SELECT id,parent_id,nickname,username FROM children WHERE id=?').get(sess.user_id) : null;
+    const user = sess.role === 'parent' ? q('SELECT id,email,name FROM parents WHERE id=? AND active=1').get(sess.user_id) : sess.role === 'tutor' ? q('SELECT id,email,name FROM tutors WHERE id=? AND active=1').get(sess.user_id) : sess.role === 'child' ? q('SELECT id,parent_id,nickname,username FROM children WHERE id=? AND active=1 AND EXISTS(SELECT 1 FROM parents WHERE parents.id=children.parent_id AND parents.active=1)').get(sess.user_id) : null;
     return user ? { ...sess, user } : null;
   }
   function newSession(res, role, id, oldSession) {
@@ -112,7 +113,8 @@ export function createAcademy(options = {}) {
     if (!sess) fail(401, 'Please sign in.');
     if (role && !(Array.isArray(role) ? role.includes(sess.role) : sess.role === role)) fail(403, 'This action is not available to this account.');
   }
-  const support = createLearningSupport({db,options,body,json,text,integer,password,hashPassword,verify,newSession,requireSession,log,transaction});
+  const support = createLearningSupport({db,options:{...options,lessonProvider:week=>management.lesson(week)},body,json,text,integer,password,hashPassword,verify,newSession,requireSession,log,transaction});
+  const management = createManagement({db,body,json,text,integer,password,hashPassword,requireSession,isAdmin:support.isAdmin,transaction});
   function childFor(sess, id) {
     requireSession(sess);
     const child = q('SELECT id,parent_id,nickname,username,avatar,unlocked,schedule FROM children WHERE id=?').get(id);
@@ -126,7 +128,7 @@ export function createAcademy(options = {}) {
   const decodeProgress = p => ({ childId: p.child_id, week: p.week, completedSteps: JSON.parse(p.steps), quizPassed: !!p.quiz, status: p.status, scores: JSON.parse(p.scores), feedback: p.feedback });
   function state(sess) {
     const base = { role: sess?.role ?? 'guest', registrationOpen: options.allowRegistration ?? process.env.ALLOW_REGISTRATION === 'true', lessons: publicLessons, rubric, csrfToken: sess?.csrf ?? '', children: [], progress: [], projects: [], activity: [] };
-    if (!sess) { support.decorate(base,sess); return base; }
+    if (!sess) { support.decorate(base,sess); management.decorate(base,sess); return base; }
     base.user = sess.user;
     const children = support.childrenFor(sess);
     base.children = children;
@@ -137,6 +139,7 @@ export function createAcademy(options = {}) {
     }
     base.activity.sort((a, b) => b.id - a.id);
     support.decorate(base,sess);
+    management.decorate(base,sess);
     return base;
   }
   function json(res, status, result) { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(result)); }
@@ -154,12 +157,13 @@ export function createAcademy(options = {}) {
       const sess = session(req);
       if (req.method === 'POST') {
         if (req.headers.origin !== origin) fail(403, 'This request did not come from this academy. Refresh the page and try again.');
-        if (sess && req.headers['x-csrf-token'] !== sess.csrf) fail(403, 'Your page is out of date. Refresh and try again.');
-        rate(`post:${req.socket.remoteAddress}`, 180);
+        if (sess && req.headers['x-csrf-token'] !== sess.csrf) { const error = new HttpError(403, 'Your page is out of date. Refresh and try again.'); error.code = 'STALE_CSRF'; throw error; }
+        rate(`post:${sess ? sess.role + ':' + sess.user_id : req.socket.remoteAddress}`, 180);
       }
-      if (req.method === 'GET' && path === '/api/healthz') { q('SELECT 1').get(); return json(res, 200, { status: 'ok', version:'0.2.0' }); }
+      if (req.method === 'GET' && path === '/api/healthz') { q('SELECT 1').get(); return json(res, 200, { status: 'ok', version:'0.3.0' }); }
       if (req.method === 'GET' && path === '/api/academy') return json(res, 200, state(sess));
       if (req.method === 'POST' && path === '/api/tutor-login') rate(`auth:${req.socket.remoteAddress}`,20);
+      if (await management.handle({req,res,path,url,sess})) return;
       if (await support.handle({req,res,path,url,sess})) return;
       if (req.method === 'POST' && ['/api/register', '/api/login', '/api/child-login'].includes(path)) {
         rate(`auth:${req.socket.remoteAddress}`, 20);
@@ -171,13 +175,13 @@ export function createAcademy(options = {}) {
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Please enter a valid email address.');
           const name = text(data.name, 'parent name', 60); const hash = await hashPassword(password(data.password));
           if (q('SELECT id FROM parents WHERE email=?').get(email)) fail(409, 'An account could not be created with these details. Try signing in.');
-          const id = randomUUID(); q('INSERT INTO parents VALUES(?,?,?,?)').run(id, email, name, hash);
+          const id = randomUUID(); q('INSERT INTO parents(id,email,name,password) VALUES(?,?,?,?)').run(id, email, name, hash);
           const csrf = newSession(res, 'parent', id, sess); return json(res, 201, { ok: true, csrfToken: csrf });
         }
         const child = path === '/api/child-login';
         const login = text(child ? data.username : data.email, 'login', 254).toLowerCase();
         rate(`account:${child}:${digest(login)}`, 15);
-        const user = child ? q('SELECT id,password FROM children WHERE username=?').get(login) : q('SELECT id,password FROM parents WHERE email=?').get(login);
+        const user = child ? q('SELECT id,password FROM children WHERE username=? AND active=1 AND EXISTS(SELECT 1 FROM parents WHERE parents.id=children.parent_id AND parents.active=1)').get(login) : q('SELECT id,password FROM parents WHERE email=? AND active=1').get(login);
         const valid = await verify(data.password, user?.password ?? dummy);
         if (!user || !valid) fail(401, 'Those sign-in details did not match. Please try again.');
         const csrf = newSession(res, child ? 'child' : 'parent', user.id, sess);
@@ -205,23 +209,25 @@ export function createAcademy(options = {}) {
           transaction(() => { q('UPDATE children SET password=? WHERE id=?').run(hash, child.id); q("DELETE FROM sessions WHERE user_id=? AND role='child'").run(child.id); log(child.id, 'parent', 'Student passphrase reset; existing sessions signed out'); });
         } else {
           const nickname = text(data.nickname, 'nickname', 30); const schedule = text(data.schedule, 'study plan', 500, false);
-          const unlocked = integer(data.unlocked, child.unlocked, 24, 'unlocked week');
+          const unlocked = integer(data.unlocked, 1, 24, 'unlocked week');
           q('UPDATE children SET nickname=?,schedule=?,unlocked=? WHERE id=?').run(nickname, schedule, unlocked, child.id);
           log(child.id, 'parent', `Study plan updated; weeks 1–${unlocked} available`);
         }
         return json(res, 200, { ok: true });
       }
       if (req.method === 'POST' && path === '/api/progress') {
-        requireSession(sess, 'child'); const data = await body(req); const child = childFor(sess, sess.user_id);
+        requireSession(sess, ['child','parent']); const data = await body(req); const child = childFor(sess, sess.role === 'child' ? sess.user_id : data.childId);
+        if(sess.role === 'parent' && data.action !== 'step') fail(403, 'Knowledge checks must be completed from the student account.');
         const week = integer(data.week, 1, child.unlocked, 'week'); const p = getProgress(child.id, week);
         if (['submitted', 'approved'].includes(p.status)) fail(409, 'This week is awaiting review or already approved. Ask a parent to request changes first.');
         if (data.action === 'step') {
           if (!stepIds.includes(data.stepId) || typeof data.completed !== 'boolean') fail(400, 'Invalid lesson step.');
           const steps = new Set(JSON.parse(p.steps)); data.completed ? steps.add(data.stepId) : steps.delete(data.stepId);
           q("UPDATE progress SET steps=?,status='in_progress',scores='[]' WHERE child_id=? AND week=?").run(JSON.stringify([...steps]), child.id, week);
+          if(sess.role === 'parent') log(child.id, 'parent', `${data.completed ? 'Completed' : 'Reopened'} learning step ${data.stepId} for week ${week}`);
         } else if (data.action === 'quiz') {
-          const answer = integer(data.answer, 0, lessons[week - 1].quiz.options.length - 1, 'answer');
-          const passed = answer === lessons[week - 1].quiz.answer;
+          const answer = integer(data.answer, 0, management.lesson(week).quiz.options.length - 1, 'answer');
+          const passed = answer === management.lesson(week).quiz.answer;
           q("UPDATE progress SET quiz=?,status='in_progress',scores='[]' WHERE child_id=? AND week=?").run(passed ? 1 : 0, child.id, week);
           return json(res, 200, { ok: true, passed, message: passed ? 'You have it! Explain your answer to your parent.' : 'Have another look at the lesson and try again.' });
         } else fail(400, 'Unknown progress action.');
@@ -301,7 +307,7 @@ export function createAcademy(options = {}) {
     } catch (error) {
       if (res.headersSent) { res.destroy(); return; }
       if (!error.status) console.error('Request failed:', error.code ?? error.name);
-      json(res, error.status ?? 500, { error: error.status ? error.message : 'Something went wrong. Please try again.' });
+      json(res, error.status ?? 500, { error: error.status ? error.message : 'Something went wrong. Please try again.', ...(error.code==='STALE_CSRF'?{code:error.code}:{}) });
     }
   });
   server.requestTimeout = 30_000; server.headersTimeout = 15_000;

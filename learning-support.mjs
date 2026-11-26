@@ -123,7 +123,7 @@ export function createLearningSupport({db,options,body,json,text,integer,passwor
         try {
           cleanup();
           const history=mode==='chat'?q('SELECT role,content FROM ai_messages WHERE child_id=? AND week=? ORDER BY id DESC LIMIT 6').all(id,week).reverse():[];
-          const result=await ai.reply({lesson:lessons[week-1],mode,message,history,studentId:id});
+          const result=await ai.reply({lesson:(options.lessonProvider?.(week) ?? lessons[week-1]),mode,message,history,studentId:id});
           // Re-check consent after awaiting an external service. No response is saved/delivered if paused.
           const current=settings(id);
           if(!current.enabled || mode==='chat'&&current.mode!=='chat')problem(403,'Your parent has changed AI access. Ask them for the next step.');

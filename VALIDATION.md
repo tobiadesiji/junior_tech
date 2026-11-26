@@ -1,3 +1,13 @@
+# Validation — 26 November 2026
+
+Version 0.3.0: `npm test` passes **48 tests** with Node.js v24.22.3. JavaScript syntax checks and `git diff --check` pass.
+
+New integration coverage verifies all three account directories are restricted to the configured administrator, cross-family parent step writes are blocked, study plans and AI settings save, stale CSRF writes fail before mutation, administrator account creation/update/pause/reset revokes sessions as intended, paused parents also block student access, and the administrator cannot lock out their own account. Content tests verify tutor/admin editing, revision conflicts, HTTPS resource validation, stable session-step counts, answer-key isolation, use of edited quiz answers, additive schema migration and persistence across restart. Rendering tests cover the public landing/sign-in distinction, access controls and escaped content.
+
+All test accounts and learning records are synthetic and isolated. Live family records were not used for testing. A local browser run could not start because a browser binary was unavailable and its download was blocked; these checks do not establish complete browser end-to-end or visual/mobile acceptance.
+
+---
+
 # Validation — 19 November 2026
 
 Version 0.2.0, verified with Node.js v24.22.3. `npm test` passes **39 tests**.
