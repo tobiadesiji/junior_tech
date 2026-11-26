@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {lessons} from './curriculum.mjs';
 
 export const defaultLanding={headline:'Small steps. Brilliant discoveries.',intro:'A 24-week adventure in computers, coding, automation and virtual robotics for curious minds aged 9–12.',about:'Build confidence through two short sessions each week, practical projects and encouragement from parents and tutors.',parentInfo:'Follow progress, celebrate projects and choose the support that suits your family.'};
-export function createManagement({db,body,json,text,integer,password,hashPassword,requireSession,isAdmin,transaction}) {
+export function createManagement({db,body,json,text,integer,password,hashPassword,requireSession,isAdmin,transaction,log}) {
   const q=sql=>db.prepare(sql),fail=(status,message)=>{throw Object.assign(new Error(message),{status});};
   for(const table of ['parents','children']) if(!q(`PRAGMA table_info(${table})`).all().some(c=>c.name==='active')) db.exec(`ALTER TABLE ${table} ADD COLUMN active INTEGER NOT NULL DEFAULT 1`);
   db.exec(`CREATE TABLE IF NOT EXISTS content(key TEXT PRIMARY KEY,value TEXT NOT NULL,revision INTEGER NOT NULL);
@@ -22,6 +22,7 @@ export function createManagement({db,body,json,text,integer,password,hashPasswor
       state.landing=landing();state.canEditContent=canEdit(sess);
       state.lessons=lessons.map(l=>{const {quiz,revision,...rest}=lesson(l.week);return {...rest,quiz:{question:quiz.question,options:quiz.options}};});
       if(isAdmin(sess)){
+        state.admin.assignments=q('SELECT a.child_id AS childId,a.tutor_id AS tutorId,c.nickname AS studentName,t.name AS tutorName,t.active FROM assignments a JOIN children c ON c.id=a.child_id JOIN tutors t ON t.id=a.tutor_id ORDER BY c.nickname,t.name').all();
         state.admin.parents=q('SELECT id,name,email,active FROM parents ORDER BY name').all();
         state.admin.students=q('SELECT c.id,c.parent_id AS parentId,c.nickname,c.username,c.schedule,c.unlocked,c.active,p.name AS parentName FROM children c JOIN parents p ON p.id=c.parent_id ORDER BY c.nickname').all();
       }
@@ -50,6 +51,20 @@ export function createManagement({db,body,json,text,integer,password,hashPasswor
           value.resources=v.resources.map(r=>{let url;try{url=new URL(r.url);}catch{fail(400,'Enter valid resource URLs.');}if(url.protocol!=='https:'||url.username||url.password)fail(400,'Resources need HTTPS links without login details.');return{title:text(r.title,'resource title',150),url:url.href};});
           save(`week:${week}`,value,data.revision,sess);
         }else fail(400,'Choose lesson or landing content.');
+        json(res,200,{ok:true});return true;
+      }
+      if(req.method==='POST'&&path==='/api/admin/assignments'){
+        requireSession(sess,'parent');if(!isAdmin(sess))fail(403,'Only the academy administrator can manage academy assignments.');
+        const data=await body(req),childId=text(data.childId,'student',100),tutorId=text(data.tutorId,'tutor',100);
+        const child=q('SELECT c.id,c.active,p.active AS parentActive FROM children c JOIN parents p ON p.id=c.parent_id WHERE c.id=?').get(childId);
+        const tutor=q('SELECT id,name,active FROM tutors WHERE id=?').get(tutorId);
+        if(!child||!tutor)fail(404,'Student or tutor not found.');
+        if(!['assign','revoke'].includes(data.action))fail(400,'Choose assign or remove.');
+        if(data.action==='assign'&&(!child.active||!child.parentActive||!tutor.active))fail(400,'Activate the student, parent and tutor accounts before assigning.');
+        transaction(()=>{
+          const result=data.action==='assign'?q('INSERT OR IGNORE INTO assignments VALUES(?,?)').run(childId,tutorId):q('DELETE FROM assignments WHERE child_id=? AND tutor_id=?').run(childId,tutorId);
+          if(result.changes){audit(sess,`tutor ${data.action}`,`${childId}:${tutorId}`);log(childId,'admin',data.action==='assign'?`Academy administrator assigned tutor ${tutor.name}`:`Academy administrator removed tutor ${tutor.name}`);}
+        });
         json(res,200,{ok:true});return true;
       }
       if(req.method==='POST'&&path==='/api/admin/accounts'){

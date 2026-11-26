@@ -114,7 +114,7 @@ export function createAcademy(options = {}) {
     if (role && !(Array.isArray(role) ? role.includes(sess.role) : sess.role === role)) fail(403, 'This action is not available to this account.');
   }
   const support = createLearningSupport({db,options:{...options,lessonProvider:week=>management.lesson(week)},body,json,text,integer,password,hashPassword,verify,newSession,requireSession,log,transaction});
-  const management = createManagement({db,body,json,text,integer,password,hashPassword,requireSession,isAdmin:support.isAdmin,transaction});
+  const management = createManagement({db,body,json,text,integer,password,hashPassword,requireSession,isAdmin:support.isAdmin,transaction,log});
   function childFor(sess, id) {
     requireSession(sess);
     const child = q('SELECT id,parent_id,nickname,username,avatar,unlocked,schedule FROM children WHERE id=?').get(id);
@@ -160,7 +160,7 @@ export function createAcademy(options = {}) {
         if (sess && req.headers['x-csrf-token'] !== sess.csrf) { const error = new HttpError(403, 'Your page is out of date. Refresh and try again.'); error.code = 'STALE_CSRF'; throw error; }
         rate(`post:${sess ? sess.role + ':' + sess.user_id : req.socket.remoteAddress}`, 180);
       }
-      if (req.method === 'GET' && path === '/api/healthz') { q('SELECT 1').get(); return json(res, 200, { status: 'ok', version:'0.3.0' }); }
+      if (req.method === 'GET' && path === '/api/healthz') { q('SELECT 1').get(); return json(res, 200, { status: 'ok', version:'0.3.1' }); }
       if (req.method === 'GET' && path === '/api/academy') return json(res, 200, state(sess));
       if (req.method === 'POST' && path === '/api/tutor-login') rate(`auth:${req.socket.remoteAddress}`,20);
       if (await management.handle({req,res,path,url,sess})) return;
@@ -216,15 +216,15 @@ export function createAcademy(options = {}) {
         return json(res, 200, { ok: true });
       }
       if (req.method === 'POST' && path === '/api/progress') {
-        requireSession(sess, ['child','parent']); const data = await body(req); const child = childFor(sess, sess.role === 'child' ? sess.user_id : data.childId);
-        if(sess.role === 'parent' && data.action !== 'step') fail(403, 'Knowledge checks must be completed from the student account.');
+        requireSession(sess, ['child','parent','tutor']); const data = await body(req); const child = childFor(sess, sess.role === 'child' ? sess.user_id : data.childId);
+        if(sess.role !== 'child' && data.action !== 'step') fail(403, 'Knowledge checks must be completed from the student account.');
         const week = integer(data.week, 1, child.unlocked, 'week'); const p = getProgress(child.id, week);
         if (['submitted', 'approved'].includes(p.status)) fail(409, 'This week is awaiting review or already approved. Ask a parent to request changes first.');
         if (data.action === 'step') {
           if (!stepIds.includes(data.stepId) || typeof data.completed !== 'boolean') fail(400, 'Invalid lesson step.');
           const steps = new Set(JSON.parse(p.steps)); data.completed ? steps.add(data.stepId) : steps.delete(data.stepId);
           q("UPDATE progress SET steps=?,status='in_progress',scores='[]' WHERE child_id=? AND week=?").run(JSON.stringify([...steps]), child.id, week);
-          if(sess.role === 'parent') log(child.id, 'parent', `${data.completed ? 'Completed' : 'Reopened'} learning step ${data.stepId} for week ${week}`);
+          if(sess.role !== 'child') log(child.id, sess.role, `${data.completed ? 'Completed' : 'Reopened'} learning step ${data.stepId} for week ${week}`);
         } else if (data.action === 'quiz') {
           const answer = integer(data.answer, 0, management.lesson(week).quiz.options.length - 1, 'answer');
           const passed = answer === management.lesson(week).quiz.answer;

@@ -26,7 +26,7 @@ export function createLearningSupport({db,options,body,json,text,integer,passwor
     const child=q('SELECT id,parent_id FROM children WHERE id=? AND parent_id=?').get(id,sess.user_id);
     if(!child)problem(404,'Student not found.');return child;
   };
-  const assigned=(sess,id)=>sess?.role==='tutor' && !!q('SELECT 1 FROM assignments a JOIN tutors t ON t.id=a.tutor_id WHERE a.child_id=? AND a.tutor_id=? AND t.active=1').get(id,sess.user_id);
+  const assigned=(sess,id)=>sess?.role==='tutor' && !!q('SELECT 1 FROM assignments a JOIN tutors t ON t.id=a.tutor_id WHERE a.child_id=? AND a.tutor_id=? AND t.active=1 AND EXISTS(SELECT 1 FROM children c JOIN parents p ON p.id=c.parent_id WHERE c.id=a.child_id AND c.active=1 AND p.active=1)').get(id,sess.user_id);
   const accessible=(sess,id)=>!!sess && (sess.role==='child' ? sess.user_id===id : sess.role==='parent' ? !!q('SELECT 1 FROM children WHERE id=? AND parent_id=?').get(id,sess.user_id) : assigned(sess,id));
   const inFlight=new Set();
   function cleanup(){
@@ -37,7 +37,7 @@ export function createLearningSupport({db,options,body,json,text,integer,passwor
   return {
     assigned,isAdmin,cleanup,
     childrenFor(sess) {
-      if(sess.role==='tutor') return q('SELECT c.id,c.nickname,c.username,c.avatar,c.unlocked,c.schedule FROM children c JOIN assignments a ON a.child_id=c.id WHERE a.tutor_id=? ORDER BY c.nickname').all(sess.user_id);
+      if(sess.role==='tutor') return q('SELECT c.id,c.nickname,c.username,c.avatar,c.unlocked,c.schedule FROM children c JOIN assignments a ON a.child_id=c.id JOIN parents p ON p.id=c.parent_id WHERE a.tutor_id=? AND c.active=1 AND p.active=1 ORDER BY c.nickname').all(sess.user_id);
       return sess.role==='parent' ? q('SELECT id,nickname,username,avatar,unlocked,schedule FROM children WHERE parent_id=?').all(sess.user_id) : q('SELECT id,nickname,username,avatar,unlocked,schedule FROM children WHERE id=?').all(sess.user_id);
     },
     decorate(state,sess) {

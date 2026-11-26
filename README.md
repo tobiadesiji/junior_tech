@@ -1,3 +1,9 @@
+## Tutor pathways update — 26 November 2026 (v0.3.1)
+
+Under **Academy admin → Student assignments**, choose a student and active tutor, then select **Assign student to tutor**. Current assignments appear directly below with a **Remove assignment** action. A student can have multiple tutors. Parents retain control of their own students' tutor access.
+
+Tutors see an assigned-student roster with **Student dashboard** and **Learning path & modules** buttons. Each student's dashboard shows their projects, review queue, study plan and progress. Tutors can tick or untick steps in unlocked lessons for their assigned students; quizzes and project submissions use student accounts. Submitted and approved weeks retain the existing review protections. Student selection is kept in page links and survives reloads. Removed or paused access blocks further tutor updates immediately.
+
 ## Academy update — 26 November 2026 (v0.3.0)
 
 - Public landing page at `/`, with separate parent, student and tutor sign-in at `/#login`.

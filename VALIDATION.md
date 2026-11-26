@@ -1,3 +1,9 @@
+# Tutor pathways validation — 26 November 2026
+
+Version 0.3.1: all **56 automated tests** pass locally. New integration tests cover administrator-only assignments, CSRF enforcement, duplicate and invalid assignments, tutors assigned across families, independent student progress, tutor step updates and undo, locked/submitted week protections, student-only quiz checks, paused-account access, persistence after restart, and immediate revocation. View tests cover the admin assignment form, escaping, student-specific tutor dashboards/module links, enabled lesson steps and unavailable-student links. Tests use isolated synthetic accounts and records.
+
+---
+
 # Validation — 26 November 2026
 
 Version 0.3.0: `npm test` passes **48 tests** with Node.js v24.22.3. JavaScript syntax checks and `git diff --check` pass.
